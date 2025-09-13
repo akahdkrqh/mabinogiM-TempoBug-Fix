@@ -1,0 +1,550 @@
+body {
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol";
+  background-color: #18181b; /* zinc-900 */
+  color: #d4d4d8; /* zinc-300 */
+  line-height: 1.6;
+  margin: 0;
+  padding: 2rem;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.container {
+  max-width: 100rem;
+  margin: 0 auto;
+  display: grid;
+  gap: 1.5rem;
+}
+header {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #fafafa; /* zinc-50 */
+  margin-bottom: 0.5rem;
+}
+p {
+  color: #94a3b8;
+  max-width: 80ch;
+  margin: 0 auto 2rem auto;
+}
+textarea,
+.track-input-wrapper textarea {
+  background-color: #27272a; /* zinc-800 */
+  border: 1px solid #3f3f46; /* zinc-700 */
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.9rem;
+  outline: none;
+  color: #e4e4e7; /* zinc-200 */
+  min-height: 250px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  resize: none;
+  /* 스크롤바가 나타날 때 레이아웃이 밀리는 현상을 방지합니다. */
+  scrollbar-gutter: stable;
+}
+
+/* 미리보기 문구가 보일 때만 스크롤바를 숨깁니다. */
+textarea:placeholder-shown {
+  overflow-y: hidden;
+}
+
+textarea:focus {
+  border-color: #6366f1; /* indigo-500 */
+  box-shadow: 0 0 0 2px #6366f160;
+}
+
+/* --- 유효성 검사 실패 시 스타일 --- */
+textarea.is-invalid {
+  border-color: #f87171; /* red-400 */
+  box-shadow: 0 0 0 2px #f8717160;
+}
+
+/* --- Placeholder 스타일 --- */
+textarea::placeholder {
+  color: #71717a; /* zinc-500 */
+  text-align: center;
+  transition: opacity 0.2s;
+}
+
+/* 포커스 시 placeholder 숨기기 */
+textarea:focus::placeholder {
+  opacity: 0;
+}
+
+/* 메인 입력창 placeholder 세로 중앙 정렬 및 폰트 크기 조정 */
+#mml-input::placeholder {
+  font-size: 1.25rem; /* 20px */
+  line-height: 1.6; /* 기본 줄 간격으로 되돌립니다. */
+  padding-top: 1.5rem; /* 위쪽에 여백을 주어 보기 좋게 만듭니다. */
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+button:active {
+  transform: scale(0.98);
+}
+button:disabled {
+  background-color: #52525b; /* zinc-600 */
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.button-secondary {
+  /* 개별 스타일은 #reset-button 에서 직접 처리합니다. */
+}
+.button-secondary:hover {
+  /* 개별 스타일은 #reset-button 에서 직접 처리합니다. */
+}
+.track-inputs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  /* 모든 아이템을 각 셀의 아래쪽에 정렬하여, 높이가 다른 아이템들의 하단 라인을 맞춥니다. */
+  align-items: end;
+}
+
+@media (max-width: 768px) {
+  .track-inputs-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.track-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: relative;
+}
+.main-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.main-input-wrapper label {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  font-weight: 500;
+  /* 아래쪽 여백을 0으로 설정하여 textarea와의 간격을 gap으로만 제어 */
+  margin-bottom: 0;
+}
+
+.track-input-wrapper label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #94a3b8;
+  font-weight: 500;
+  /* 버튼의 높이(약 24px)를 고려하여 최소 높이를 지정, 레이아웃 밀림 방지 */
+  min-height: 24px;
+}
+.delete-track-button {
+  background: none;
+  border: none;
+  color: #71717a; /* zinc-500 */
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.delete-track-button:hover {
+  color: #f87171; /* red-400 */
+}
+.delete-track-button.is-hidden {
+  /* 요소를 숨기지만 공간은 차지하도록 visibility 사용 */
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* --- 트랙 추가 버튼 --- */
+.add-track-button-wrapper {
+  /* 점선 영역 스타일 */
+  border: 2px dashed #3f3f46; /* zinc-700 */
+  border-radius: 0.75rem;
+  transition: border-color 0.2s;
+  cursor: pointer;
+
+  /* textarea와 동일한 box-sizing을 적용하여 높이 계산 방식을 통일합니다. */
+  box-sizing: border-box;
+
+  /* 크기 및 위치 설정 */
+  min-height: 120px; /* 텍스트 박스와 동일한 최소 높이 */
+  /* align-self는 이제 grid-container의 align-items: end 로 대체되어 필요 없습니다. */
+
+  /* 내부 버튼을 중앙 정렬하기 위한 flex 컨테이너 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* + 아이콘 스타일 */
+  color: #71717a; /* zinc-500 */
+  font-size: 2.5rem;
+  transition: color 0.2s;
+}
+
+.add-track-button-wrapper:hover {
+  border-color: #6366f1; /* indigo-500 */
+  color: #6366f1; /* indigo-500 */
+}
+
+.track-input-wrapper textarea {
+  min-height: 120px;
+  font-size: 0.8rem;
+  padding: 0.75rem;
+}
+
+/* 개별 트랙 입력창 placeholder 세로 중앙 정렬 */
+.track-input-wrapper textarea::placeholder {
+  line-height: calc(120px - 0.75rem * 2); /* min-height - (padding * 2) */
+}
+
+.spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid #4f46e5; /* indigo-600 */
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: none;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+h2 {
+  font-size: 1.5rem;
+  color: #f1f5f9;
+  margin: 1.5rem 0 0.75rem 0;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.5rem;
+}
+
+/* --- New Floating Controls --- */
+.floating-controls {
+  position: fixed; /* 화면에 고정 */
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%); /* 가로 중앙 정렬 */
+  display: flex;
+  gap: 0.75rem;
+  z-index: 10;
+  transition: transform 0.3s ease-in; /* 부드러운 관성 효과 */
+}
+
+/* --- 버튼 개별 스타일 재정의 --- */
+.floating-controls button {
+  /* 알약(Pill) 모양으로 변경 */
+  border-radius: 9999px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  font-size: 0.9rem;
+  padding: 0.6rem 1.2rem;
+  transition: all 0.2s ease-in-out; /* 모든 전환 효과를 부드럽게 */
+  border: 1px solid transparent;
+}
+
+/* 주요 버튼 호버/활성 효과 */
+.floating-controls button:not(#reset-button):hover {
+  transform: translateY(-2px); /* 살짝 위로 떠오르는 효과 */
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+.floating-controls button:not(#reset-button):active {
+  transform: translateY(-1px) scale(0.98);
+}
+
+/* 주요 버튼 그라데이션 및 내부 그림자 */
+.floating-controls button:not(#reset-button) {
+  background-image: linear-gradient(to bottom, #5659e8, #4338ca);
+  border-color: #6d70f1;
+  box-shadow: inset 0 1px 1px #818cf8, 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+#reset-button {
+  background-color: #3f3f46; /* zinc-700 */
+  color: #a1a1aa; /* zinc-400 */
+  border: 1px solid #52525b; /* zinc-600 */
+}
+#reset-button:hover {
+  background-color: #52525b; /* zinc-600 */
+  color: #e4e4e7; /* zinc-200 */
+  border-color: #71717a; /* zinc-500 */
+  transform: translateY(-2px);
+}
+
+/* 최종 결과창 아래 여백 추가 (플로팅 버튼에 가려지지 않도록) */
+#result-section {
+  margin-bottom: 5rem; /* 80px */
+}
+
+textarea::-webkit-scrollbar-track {
+  /* 트랙을 투명하게 만들어 텍스트 박스의 둥근 모서리가 가려지지 않게 합니다. */
+  background: transparent;
+}
+
+textarea::-webkit-scrollbar-thumb {
+  background-color: #52525b; /* zinc-600 */
+  border-radius: 10px;
+  border: 2px solid transparent; /* 테두리를 투명하게 만들어 여백 역할만 하도록 합니다. */
+  background-clip: padding-box; /* 배경색이 테두리 영역을 침범하지 않도록 합니다. */
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+  background-color: #71717a; /* zinc-500 */
+}
+.is-hidden {
+  display: none !important;
+}
+/* Custom Scrollbar Styling */
+textarea::-webkit-scrollbar {
+  width: 12px;
+}
+.is-hidden {
+  display: none !important;
+}
+
+/* --- Tutorial Overlay --- */
+#tutorial-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(10, 10, 10, 0.85);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  opacity: 0;
+  cursor: pointer;
+}
+
+#tutorial-overlay.is-visible {
+  opacity: 1;
+}
+
+.tutorial-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4rem;
+  padding: 2rem;
+  box-sizing: border-box;
+}
+
+.tutorial-step {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  color: #fff;
+  text-align: center;
+  flex-direction: column;
+  max-width: 400px;
+  flex: 1; /* 양쪽 설명 박스가 동일한 너비를 갖도록 설정 */
+}
+
+.tutorial-step span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 5rem;
+  height: 5rem;
+  border-radius: 50%;
+  background-color: rgba(99, 102, 241, 0.2);
+  border: 2px solid #6366f1;
+  font-size: 3rem;
+  font-weight: 700;
+  color: #e0e7ff;
+  text-shadow: 0 0 10px #6366f1;
+}
+
+.tutorial-step p {
+  font-size: 2.5rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #e0e7ff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.tutorial-arrow {
+  width: 200px;
+  height: 100px;
+  background-image: url("data:image/svg+xml,%3Csvg fill='%23a5b4fc' version='1.1' id='Capa_1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' viewBox='0 0 375.01 375.01' xml:space='preserve'%3E%3Cg id='SVGRepo_bgCarrier' stroke-width='0'%3E%3C/g%3E%3Cg id='SVGRepo_tracerCarrier' stroke-linecap='round' stroke-linejoin='round'%3E%3C/g%3E%3Cg id='SVGRepo_iconCarrier'%3E %3Cg%3E %3Cg%3E %3Cpath d='M330.254,210.966c-56.916,1.224-110.16,25.704-167.076,28.764c-16.524,0.612-33.048-1.224-45.9-8.568 c23.256-4.283,45.288-12.239,61.812-27.54c17.749-15.911,19.584-45.287,8.568-66.095c-10.404-19.584-36.72-20.196-55.08-15.3 C89.125,132.63,59.75,184.65,84.229,221.369c-26.928,1.836-53.856,0-80.172,1.225c-5.508,0.611-5.508,8.567,0.612,8.567 c26.928,1.836,59.364,4.284,91.188,2.448c1.836,1.225,3.672,3.061,5.508,4.284c64.872,45.288,159.732-11.628,229.5-13.464 C338.821,223.817,338.821,210.354,330.254,210.966z M89.737,196.277c-6.732-25.091,15.3-46.511,35.496-56.916 c20.196-10.404,48.96-10.404,55.692,15.912c7.956,30.6-18.36,48.959-43.452,56.916c-11.628,3.672-22.644,6.12-34.272,7.344 C96.47,213.413,92.186,206.069,89.737,196.277z'%3E%3C/path%3E %3Cpath d='M371.869,211.577c-8.567-5.508-16.523-11.016-24.479-16.523c-6.732-4.896-13.464-10.404-21.42-12.24 c-6.12-1.836-12.24,7.344-6.732,11.627c6.732,4.896,14.076,9.18,20.809,13.464c4.896,3.061,9.792,6.732,14.075,9.792 c-4.896,2.448-9.792,4.284-14.688,6.732c-3.672,1.836-7.956,3.672-11.628,5.508c-1.224,0.612-2.448,1.836-3.061,3.06 c-1.836,2.448-0.611,1.225,0,0.612c-2.447,1.836-2.447,7.956,1.837,7.344l0,0c1.224,0.612,2.447,0.612,4.283,0.612 c4.284-1.224,9.181-3.06,13.464-4.896c9.181-3.673,18.36-7.345,26.929-12.24C376.153,220.758,376.153,214.025,371.869,211.577z'%3E%3C/path%3E %3C/g%3E %3C/g%3E %3C/g%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  align-self: center;
+}
+
+@media (max-width: 1024px) {
+  .tutorial-content {
+    flex-direction: column;
+  }
+  .tutorial-arrow {
+    transform: rotate(90deg);
+    width: 100px;
+    height: 100px;
+  }
+}
+
+.tutorial-exit-message {
+  position: absolute;
+  bottom: 3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #a1a1aa;
+  font-size: 0.9rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* --- 로그 및 결과창 스타일 --- */
+#log-output,
+#result-output {
+  background-color: #1f2937; /* gray-800, 입력창과 약간 다른 배경 */
+  color: #d1d5db; /* gray-300 */
+  cursor: default;
+}
+
+#log-output::placeholder,
+#result-output::placeholder {
+  text-align: left; /* 미리보기 텍스트를 왼쪽 정렬 */
+}
+
+/* 로그창 오류 스타일 */
+#log-output.is-error {
+  color: #f87171; /* red-400 */
+}
+
+/* --- 도움말 버튼 --- */
+.floating-help-button-wrapper {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 10;
+  transition: transform 0.3s ease-in; /* 부드러운 관성 효과 */
+}
+
+#help-button {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  /* 주요 버튼 스타일 일부 적용 */
+  background-image: linear-gradient(to bottom, #5659e8, #4338ca);
+  border: 1px solid #6d70f1;
+  box-shadow: inset 0 1px 1px #818cf8, 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+#help-button:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+/* --- 주의사항 버튼 --- */
+.floating-notice-button-wrapper {
+  position: fixed;
+  bottom: calc(2rem + 50px + 0.75rem); /* 도움말 버튼 위 (버튼높이 + 간격) */
+  right: 2rem;
+  z-index: 10;
+  transition: transform 0.3s ease-in;
+}
+
+#notice-button {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0;
+  background-color: #f59e0b; /* amber-500 */
+  border: 1px solid #d97706; /* amber-600 */
+  box-shadow: inset 0 1px 1px #fcd34d, 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+#notice-button:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  background-color: #d97706;
+}
+
+/* --- 주의사항 오버레이 --- */
+#notice-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(10, 10, 10, 0.85);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  z-index: 1001; /* 튜토리얼보다 위에 */
+  opacity: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease-in-out;
+}
+
+#notice-overlay.is-visible {
+  opacity: 1;
+}
+
+.notice-content {
+  background-color: #27272a;
+  padding: 2rem 2.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid #52525b;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  max-width: 600px;
+  color: #d4d4d8;
+}
+
+.notice-content ul {
+  padding-left: 1.5rem;
+  margin: 1rem 0;
+}
+
+.notice-tip {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #3f3f46;
+  line-height: 1.7;
+}
+
+.notice-example {
+  display: block;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: #a1a1aa; /* zinc-400 */
+}
