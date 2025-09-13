@@ -16,6 +16,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let finalMMLResult = "";
   let isSyncing = false; // 양방향 동기화 무한 루프 방지 플래그
+  const DEBOUNCE_DELAY = 500; // 디바운싱 딜레이 (ms)
+
+  // --- 디바운스 유틸리티 함수 ---
+  const debounce = (func, delay) => {
+    let timeoutId;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        func.apply(this, args);
+      }, delay);
+    };
+  };
 
   // --- 로깅 함수 ---
   const appendToLog = (message, type = "info") => {
@@ -225,7 +237,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // 메인 MML 입력창 내용이 변할 때만 개별 트랙을 갱신합니다.
-  mmlInput.addEventListener("input", syncMmlToTracks);
+  mmlInput.addEventListener("input", debounce(syncMmlToTracks, DEBOUNCE_DELAY));
 
   // 개별 트랙들의 코드를 메인 MML 입력창에 합쳐서 업데이트하는 함수
   const syncTracksToMml = () => {
@@ -250,6 +262,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     isSyncing = false;
   };
+
+  // 개별 트랙 입력에 대한 디바운스 함수를 미리 생성합니다.
+  const debouncedSyncTracksToMml = debounce(syncTracksToMml, DEBOUNCE_DELAY);
 
   // --- 스크롤에 따른 버튼 관성 효과 로직 ---
   let lastScrollTop = 0;
@@ -408,8 +423,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   trackInputsContainer.addEventListener("input", (e) => {
     if (e.target.classList.contains("track-input")) {
-      updateTrackInputsUI(); // 글자 수 실시간 업데이트
-      syncTracksToMml();
+      // 글자 수 실시간 업데이트는 즉시, MML 합치기는 디바운싱 적용
+      updateTrackInputsUI();
+      debouncedSyncTracksToMml();
     }
   });
 
