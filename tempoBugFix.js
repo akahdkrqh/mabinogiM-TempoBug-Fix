@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const noticeOverlay = document.getElementById("notice-overlay");
   const noticeButtonWrapper = document.querySelector(".floating-notice-button-wrapper");
 
-  let finalMMLResult = "";
+  let finalMML = "";
   let isSyncing = false; // 양방향 동기화 무한 루프 방지 플래그
   const DEBOUNCE_DELAY = 500; // 디바운싱 딜레이 (ms)
 
@@ -130,7 +130,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // 5. 모든 검사를 통과하면 처리 시작
     bugFixButton.disabled = true;
     bugFixButton.textContent = "⏳ 처리 중...";
-    finalMMLResult = "";
+    finalMML = "";
 
     setTimeout(() => {
       try {
@@ -179,7 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
     bugFixButton.textContent = "버그 수정";
 
     // 전역 결과 초기화
-    finalMMLResult = "";
+    finalMML = "";
     console.log("✨ 모든 입력이 초기화되었습니다.");
   });
 
@@ -456,8 +456,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const tracksWithTempo = insertTempoTokens(processedTracks, tempoPoints);
 
       // 각 트랙에 시작 템포가 없으면 t120 추가
-      ensureStartTempo(tracksWithTempo);
-      appendToLog("시작템포 누락 확인 t120 추가합니다.");
+      normalizeTempoTokens(tracksWithTempo);
 
       // 트랙 템포 구간별 음표 수 체크
       const tempoSegmentsInfo = analyzeTempoSegments(tracksWithTempo, tempoPoints);
@@ -465,25 +464,48 @@ document.addEventListener("DOMContentLoaded", () => {
       // 상세 로그가 필요하면 아래 주석 해제
       // appendToLog(`분석 결과: ${JSON.stringify(tempoSegmentsInfo, null, 2)}`);
 
-      // L 명령어 최적화를 해제하고 모든 음표에 길이를 명시합니다.
-      const expandedTracks = expandLCommands(tracksWithTempo);
+      // --- 파이프라인 1 실행 ---
+      appendToLog("--- 파이프라인 1 실행 ---");
+      console.log("\n--- 파이프라인 1 실행 ---");
+      const expandedTracks1 = expandLCommands(tracksWithTempo);
       appendToLog("L 명령어 최적화 해제 완료.");
+      const equalizedTracks1 = equalizeNoteCounts1(expandedTracks1, tempoSegmentsInfo);
+      appendToLog("템포 구간별 음표 개수를 통일해 버그를 임시로 수정했습니다.(동일 길이 그룹 우선 분할)");
+      const optimizedTracks1 = runOptimizationPipeline(equalizedTracks1);
+      const { trackStrings: trackStrings1 } = serializeTracks(optimizedTracks1, false); // 최종 MML 생성 안함
+      appendToLog("--- 파이프라인 1 실행 완료---");
 
-      // 각 템포 구간의 음표 개수를 최대치에 맞게 통일합니다.
-      const equalizedTracks = equalizeNoteCounts(expandedTracks, tempoSegmentsInfo);
-      appendToLog("템포 구간별 음표 개수 통일을 통해 버그를 임시로 수정했습니다.");
+      // --- 파이프라인 2 실행 ---
+      appendToLog("--- 파이프라인 2 실행 ---");
+      console.log("\n--- 파이프라인 2 실행 ---");
+      const equalizedTracks2 = equalizeNoteCounts2(tracksWithTempo, tempoSegmentsInfo);
+      appendToLog("템포 구간별 음표 개수를 통일해 버그를 임시로 수정했습니다.(기존 코드 유지+필요한 부분만 분할)");
+      const optimizedTracks2 = runOptimizationPipeline(equalizedTracks2);
+      const { trackStrings: trackStrings2 } = serializeTracks(optimizedTracks2, false); // 최종 MML 생성 안함
+      appendToLog("--- 파이프라인 2 실행 완료 ---");
 
-      // 최적화 파이프라인을 적용합니다.
-      appendToLog("최종 MML 코드 임시 최적화 시작...");
-      const optimizedLTracks = optimizeTracks(equalizedTracks);
-      const optimizedTracks = optimizeNNotes(optimizedLTracks);
-      appendToLog("임시 최적화 완료.");
+      // --- 결과 비교 및 병합 ---
+      console.log("--- 결과 비교 및 병합 ---");
+      console.log("\n--- 결과 비교 및 병합 ---");
+      const finalTrackStrings = [];
+      for (let i = 0; i < tracks.length; i++) {
+        const track1 = trackStrings1[i] || "";
+        const track2 = trackStrings2[i] || "";
+        if (track1.length < track2.length) {
+          finalTrackStrings.push(track1);
+          appendToLog(`트랙 ${i + 1}: 방식 1 선택 (길이: ${track1.length} < ${track2.length})`);
+          console.log(`트랙 ${i + 1}: 방식 1 선택 (길이: ${track1.length} < ${track2.length})`);
+        } else {
+          finalTrackStrings.push(track2);
+          appendToLog(`트랙 ${i + 1}: 방식 2 선택 (길이: ${track1.length} >= ${track2.length})`);
+          console.log(`트랙 ${i + 1}: 방식 2 선택 (길이: ${track1.length} >= ${track2.length})`);
+        }
+      }
 
-      // 직렬화하여 최종 MML 코드를 생성합니다.
-      const { finalMML, trackLengths } = serializeTracks(optimizedTracks);
+      finalMML = `MML@${finalTrackStrings.join(",")};`;
+      const trackLengths = finalTrackStrings.map((t) => t.length);
 
       // 최종 결과 저장 및 UI 업데이트
-      finalMMLResult = finalMML;
       bugFixButton.classList.add("is-hidden");
       finalCopyButton.classList.remove("is-hidden");
 
@@ -502,12 +524,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
-      resultOutput.value = finalMMLResult;
+      resultOutput.value = finalMML;
       resultOutput.scrollIntoView({ behavior: "smooth", block: "end" });
 
       // 클립보드에 복사
       navigator.clipboard
-        .writeText(finalMMLResult)
+        .writeText(finalMML)
         .then(() => {
           appendToLog("📋 결과가 클립보드에 자동으로 복사되었습니다. 인게임에서 붙여넣기 해주세요", "success");
         })
@@ -1135,19 +1157,22 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * 모든 트랙을 확인하여, 트랙의 시작 부분에 템포(t) 명령어가 없으면 t120을 추가합니다.
-   * 이 함수는 `insertTempoTokens`가 호출된 후에 실행되어야 합니다.
+   * 모든 트랙의 시작과 끝 템포를 정규화합니다.
+   * 1. 트랙 시작 부분에 템포(t) 명령어가 없으면 t120을 추가합니다.
+   * 2. 모든 트랙의 마지막 음표/쉼표 뒤에 공통적으로 나타나는 불필요한 템포 토큰을 제거합니다.
    * @param {Array<Array<Object>>} tracks - 템포 토큰이 삽입된 트랙 배열 (이 배열은 직접 수정됩니다).
    */
-  function ensureStartTempo(tracks) {
+  function normalizeTempoTokens(tracks) {
+    // 1. 시작 템포 보장
     tracks.forEach((track, index) => {
       // 트랙이 비어있거나, 첫 토큰의 시작 tick이 0이 아니거나, 이미 템포 토큰인 경우는 제외
       if (track.length === 0 || track[0].accumulatedTick !== 0 || track[0].raw.toLowerCase().startsWith("t")) {
         return;
       }
 
-      // 첫 토큰이 템포가 아니면, 맨 앞에 t120 템포 토큰을 추가합니다.
-      console.log(`[Track ${index + 1}] 시작 템포 누락, t120을 추가합니다.`);
+      // 첫 토큰이 템포가 아니면, 맨 앞에 t120 템포 토큰을 추가
+      appendToLog(`[Track ${index + 1}] 시작 템포가 누락되어 t120을 추가합니다.`);
+      console.log(`[Track ${index + 1}] 시작 템포가 누락되어 t120을 추가합니다.`);
       track.unshift({
         type: "command",
         raw: "t120",
@@ -1155,8 +1180,41 @@ document.addEventListener("DOMContentLoaded", () => {
         hasDot: false,
         currentTick: 0,
         accumulatedTick: 0,
+        currentOctave: track[0].currentOctave, // 옥타브 일관성 유지
       });
     });
+
+    // 2. 끝 템포 최적화
+    if (tracks.length === 0) return;
+
+    // 각 트랙의 마지막 음표/쉼표/n음표 이후의 첫 템포 토큰을 찾습니다.
+    const lastTempoTokens = tracks.map((track) => {
+      let lastNoteIndex = -1;
+      for (let i = track.length - 1; i >= 0; i--) {
+        const tokenType = track[i].type;
+        if (tokenType === "note" || tokenType === "rest" || tokenType === "n_note") {
+          lastNoteIndex = i;
+          break;
+        }
+      }
+      return track.slice(lastNoteIndex + 1).find((t) => t.raw.toLowerCase().startsWith("t")) || null;
+    });
+
+    // 모든 트랙이 마지막 음표 뒤에 템포 토큰을 가지고 있는지, 그리고 그 템포 값이 모두 동일한지 확인합니다.
+    const firstTempo = lastTempoTokens[0];
+    if (firstTempo && lastTempoTokens.every((t) => t && t.raw.toLowerCase() === firstTempo.raw.toLowerCase())) {
+      appendToLog(`모든 트랙의 끝에서 공통된 템포 토큰 '${firstTempo.raw}'을(를) 발견하여 삭제합니다.`);
+      console.log(`모든 트랙의 끝에서 공통된 템포 토큰 '${firstTempo.raw}'을(를) 발견하여 삭제합니다.`);
+
+      // 모든 트랙에서 해당 템포 토큰을 제거합니다.
+      tracks.forEach((track, index) => {
+        const tokenToRemove = lastTempoTokens[index];
+        const tokenIndex = track.lastIndexOf(tokenToRemove);
+        if (tokenIndex > -1) {
+          track.splice(tokenIndex, 1);
+        }
+      });
+    }
   }
 
   /**
@@ -1165,12 +1223,18 @@ document.addEventListener("DOMContentLoaded", () => {
    * @param {Array<Object>} tempoSegmentsInfo - 구간별 분석 정보 배열
    * @returns {Array<Array<Object>>} 음표 개수가 통일된 새로운 트랙 배열
    */
-  function equalizeNoteCounts(tracks, tempoSegmentsInfo) {
+  function equalizeNoteCounts1(tracks, tempoSegmentsInfo) {
     // 원본 수정을 피하기 위해 깊은 복사
     const newTracks = JSON.parse(JSON.stringify(tracks));
 
     // 각 템포 구간에 대해 작업 수행
     tempoSegmentsInfo.forEach((segment, segmentIndex) => {
+      // 마지막 템포 구간에 대해서는 작업 수행하지 않음
+      if (segmentIndex === tempoSegmentsInfo.length - 1) {
+        console.log(`\n[Segment ${segmentIndex + 1}] Tick: ${segment.startTick}-${segment.endTick}, Skipping last segment processing.`);
+        return;
+      }
+
       const { startTick, endTick, trackNoteCounts } = segment;
       const targetCount = Math.max(...trackNoteCounts.map((t) => t.count));
 
@@ -1204,10 +1268,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
           if (splittableRests.length > 0) {
             tokensToProcess = splittableRests;
-            // console.log("    - Prioritizing rests for splitting.");
+            console.log("    - Prioritizing rests for splitting.");
           } else {
             tokensToProcess = allSplittableInSegment.filter((t) => t.type === "note");
-            // console.log("    - No splittable rests found. Processing notes.");
+            console.log("    - No splittable rests found. Processing notes.");
           }
 
           if (tokensToProcess.length === 0) break; // 분할할 대상이 없으면 종료
@@ -1337,6 +1401,139 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
+   * 각 템포 구간의 음표/쉼표 개수를 최대치에 맞게 통일합니다. (전략 3)
+   * equalizeNoteCounts 기반, 분할 전략만 수정
+   * @param {Array<Array<Object>>} tracks - 템포 토큰이 삽입된 트랙 배열
+   * @param {Array<Object>} tempoSegmentsInfo - 구간별 분석 정보 배열
+   * @returns {Array<Array<Object>>} 음표 개수가 통일된 새로운 트랙 배열
+   */
+  function equalizeNoteCounts2(tracks, tempoSegmentsInfo) {
+    const newTracks = JSON.parse(JSON.stringify(tracks));
+
+    tempoSegmentsInfo.forEach((segment, segmentIndex) => {
+      if (segmentIndex === tempoSegmentsInfo.length - 1) {
+        console.log(`\n[Segment ${segmentIndex + 1}] Tick: ${segment.startTick}-${segment.endTick}, Skipping last segment processing.`);
+        return;
+      }
+
+      const { startTick, endTick, trackNoteCounts } = segment;
+      const targetCount = Math.max(...trackNoteCounts.map((t) => t.count));
+
+      console.log(`\n[Segment ${segmentIndex + 1}] Tick: ${startTick}-${endTick}, Target Note Count: ${targetCount}`);
+
+      trackNoteCounts.forEach(({ trackIndex, count }) => {
+        let currentNoteCount = count;
+        if (currentNoteCount >= targetCount) return;
+
+        console.log(`  [Track ${trackIndex + 1}] ${currentNoteCount} -> ${targetCount} (${targetCount - currentNoteCount} notes to add)`);
+
+        const track = newTracks[trackIndex];
+        let iterationGuard = 0;
+
+        while (currentNoteCount < targetCount && iterationGuard < 1000) {
+          iterationGuard++;
+          console.log(`\n    --- Iteration ${iterationGuard} (current notes: ${currentNoteCount}) ---`);
+
+          // 1. 분할 대상 찾기 (쉼표 -> 반음 없는 음표 -> 나머지 음표 순, 각 그룹 내에서는 가장 긴 음표 우선)
+          const splittableTokens = track.filter(
+            (t) => (t.type === "rest" || t.type === "note") && t.accumulatedTick >= startTick && t.accumulatedTick < endTick && t.noteLength < 64
+          );
+
+          if (splittableTokens.length === 0) {
+            console.warn(`    - No more splittable tokens in this segment for Track ${trackIndex + 1}.`);
+            break;
+          }
+
+          // 우선순위에 따라 토큰 분류
+          const rests = splittableTokens.filter((t) => t.type === "rest");
+          const naturalNotes = splittableTokens.filter((t) => t.type === "note" && !/[#\+\-]/.test(t.raw));
+          const accidentalNotes = splittableTokens.filter((t) => t.type === "note" && /[#\+\-]/.test(t.raw));
+
+          // 각 그룹을 음표 길이(noteLength) 오름차순으로 정렬 (가장 긴 음표가 맨 앞으로)
+          const sortByLength = (a, b) => a.noteLength - b.noteLength;
+          rests.sort(sortByLength);
+          naturalNotes.sort(sortByLength);
+          accidentalNotes.sort(sortByLength);
+
+          // 우선순위에 따라 분할할 토큰 하나를 선택
+          let tokenToSplitRef = null;
+          if (rests.length > 0) {
+            tokenToSplitRef = rests[0];
+          } else if (naturalNotes.length > 0) {
+            tokenToSplitRef = naturalNotes[0];
+          } else if (accidentalNotes.length > 0) {
+            tokenToSplitRef = accidentalNotes[0];
+          }
+
+          if (!tokenToSplitRef) {
+            console.warn(`    - Could not determine a token to split for Track ${trackIndex + 1}.`);
+            break;
+          }
+
+          const targetTokenIndex = track.findIndex((t) => t === tokenToSplitRef);
+          if (targetTokenIndex === -1) {
+            console.warn(`    - No more splittable tokens in this segment for Track ${trackIndex + 1}.`);
+            break;
+          }
+
+          const tokenToSplit = track[targetTokenIndex];
+          console.log(`    [Step 1] Found token to split at index ${targetTokenIndex}: ${tokenToSplit.raw}`);
+
+          // 3. 지수적 분할 시작
+          let splitTokens = [tokenToSplit];
+          track.splice(targetTokenIndex, 1); // 원본에서 대상 토큰 제거
+
+          console.log("    [Step 2] Starting exponential splitting...");
+          while (true) {
+            console.log(`      - Current group: [${splitTokens.map((t) => t.raw).join(" ")}] (count: ${splitTokens.filter((t) => t.type !== "tie").length})`);
+
+            // 다음 분할 시 추가될 음표의 개수는 현재 그룹의 음표/쉼표 개수와 같습니다.
+            const notesToAddOnNextSplit = splitTokens.filter((t) => t.type !== "tie").length;
+
+            // 4. 분할 중단 조건 확인
+            if (currentNoteCount + notesToAddOnNextSplit > targetCount) {
+              console.log(
+                `      - Next split would exceed target (${currentNoteCount} + ${notesToAddOnNextSplit} = ${
+                  currentNoteCount + notesToAddOnNextSplit
+                } > ${targetCount}). Stopping split.`
+              );
+              break;
+            }
+            if (!splitTokens[0] || splitTokens.find((t) => t.type !== "tie").noteLength * 2 > 64) {
+              console.log(`    - Note length limit (64) reached. Stopping split.`);
+              break;
+            }
+
+            // 5. 분할 실행
+            const newSplitTokens = [];
+            for (const token of splitTokens) {
+              if (token.type === "tie") {
+                newSplitTokens.push(token);
+                continue;
+              }
+              const splitResult = splitSingleToken(token);
+              newSplitTokens.push(...splitResult);
+            }
+            splitTokens = newSplitTokens;
+            currentNoteCount += notesToAddOnNextSplit;
+          }
+
+          // 6. 분할된 토큰들을 트랙에 다시 삽입 (L 명령어 처리 없이)
+          console.log(`    [Step 3] Inserting split tokens: ${splitTokens.map((t) => t.raw).join(" ")}`);
+          track.splice(targetTokenIndex, 0, ...splitTokens);
+
+          if (iterationGuard >= 999) {
+            console.error("    - Max iteration guard reached. Breaking loop to prevent infinite execution.");
+            break;
+          }
+        }
+      });
+    });
+
+    return newTracks;
+  }
+
+  /**
    * 단일 토큰을 두 개의 더 짧은 토큰으로 분할합니다.
    * @param {Object} tokenToSplit - 분할할 토큰 객체
    * @returns {Array<Object>} 분할된 새 토큰들의 배열
@@ -1389,16 +1586,18 @@ document.addEventListener("DOMContentLoaded", () => {
    * 후처리된 트랙 토큰 배열을 최종 MML 문자열로 변환합니다.
    * @param {Array<Array<Object>>} processedTracks - 모든 처리가 완료된 토큰들의 트랙 배열
    * @returns {{finalMML: string, trackLengths: number[]}} 완성된 MML 코드와 각 트랙의 길이를 담은 객체
+   * @param {boolean} createFinalMML - 최종 MML 문자열을 생성할지 여부
+   * @returns {{finalMML: string, trackLengths: number[], trackStrings: string[]}}
    */
-  function serializeTracks(processedTracks) {
+  function serializeTracks(processedTracks, createFinalMML = true) {
     const trackStrings = processedTracks.map((track) => {
       return track.map((token) => token.raw).join("");
     });
 
     const trackLengths = trackStrings.map((track) => track.length);
-    const finalMML = `MML@${trackStrings.join(",")};`;
+    const finalMML = createFinalMML ? `MML@${trackStrings.join(",")};` : "";
 
-    return { finalMML, trackLengths };
+    return { finalMML, trackLengths, trackStrings };
   }
 
   /**
@@ -1447,7 +1646,6 @@ document.addEventListener("DOMContentLoaded", () => {
               }
             }
             newToken.raw = newRaw;
-            console.log(`Expanding note: ${token.raw} -> ${newRaw}`);
           }
         }
 
@@ -1460,19 +1658,37 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
+   * 전체 최적화 파이프라인을 실행합니다.
+   * L 명령어 최적화와 n-note 최적화를 순차적으로 적용합니다.
+   * @param {Array<Array<Object>>} tracks - 최적화할 트랙 배열
+   * @returns {Array<Array<Object>>} 모든 최적화가 적용된 트랙 배열
+   */
+  function runOptimizationPipeline(tracks) {
+    appendToLog("최종 MML 코드 임시 최적화 시작...");
+    console.log("--- 전체 최적화 파이프라인 시작 ---");
+    const optimizedLTracks = optimizeLCommands(tracks);
+    const optimizedNNoteTracks = optimizeNNotes(optimizedLTracks);
+    const optimizedEnharmonics = optimizeEnharmonicNotes(optimizedNNoteTracks);
+    appendToLog("임시 최적화 완료.");
+    console.log("--- 전체 최적화 파이프라인 완료 ---");
+
+    return optimizedEnharmonics;
+  }
+
+  /**
    * 여러 트랙에 대해 최적화 파이프라인을 적용합니다.
    * @param {Array<Array<Object>>} tracks - 최적화할 트랙 배열
    * @returns {Array<Array<Object>>} 최적화된 트랙 배열
    */
-  function optimizeTracks(tracks) {
-    console.log("--- L 명령어 최적화 (1/3단계) ---");
-    const newTracks = tracks.map((track) => {
+  function optimizeLCommands(tracks) {
+    console.log("--- L 명령어 최적화 시작 ---");
+    const newTracks = tracks.map((track, trackIndex) => {
       // 1단계: 그룹을 찾아 L 명령어 도입
-      const phase1 = optimizeLCommand(track);
+      const phase1 = optimizeLCommandPhase1(track);
       // 2단계: 현재 L값과 일치하는 개별 음표의 길이 제거
       const phase2 = optimizeLCommandPhase2(phase1);
       // 3단계: 불필요한 L 명령어 제거
-      const phase3 = optimizeLCommandPhase3(phase2);
+      const phase3 = optimizeLCommandPhase3(phase2, trackIndex);
       return phase3;
     });
     console.log("--- L 명령어 최적화 완료 ---");
@@ -1483,10 +1699,23 @@ document.addEventListener("DOMContentLoaded", () => {
    * @param {Array<Object>} track - 최적화할 트랙의 토큰 배열
    * @returns {Array<Object>} 최적화된 새로운 토큰 배열
    */
-  function optimizeLCommand(track) {
+  function optimizeLCommandPhase1(track) {
+    // 0. 최적화를 시작하기 전에, 각 토큰 위치에서 유효한 L 값을 미리 계산합니다.
+    const lValueMap = new Map();
+    let activeLValue = "4";
+    for (let i = 0; i < track.length; i++) {
+      lValueMap.set(i, activeLValue);
+      const token = track[i];
+      if (token.raw.toLowerCase().startsWith("l")) {
+        const match = token.raw.toLowerCase().match(/l(\d+\.?)/);
+        if (match) {
+          activeLValue = match[1];
+        }
+      }
+    }
+
     let newTrack = [];
     let i = 0;
-    let lastLValue = "4"; // MML의 기본 L값
 
     while (i < track.length) {
       const currentToken = track[i];
@@ -1498,7 +1727,7 @@ document.addEventListener("DOMContentLoaded", () => {
         continue;
       }
 
-      // 현재 위치에서 시작하는, 같은 길이의 연속된 음표/쉼표 그룹 찾기
+      // 1. 현재 위치에서 시작하는, 같은 길이의 연속된 음표/쉼표 그룹 찾기
       const group = {
         tokens: [], // 그룹에 속한 모든 토큰 (명령어 포함)
         notes: [], // 그룹 내 음표/쉼표 토큰만
@@ -1529,20 +1758,35 @@ document.addEventListener("DOMContentLoaded", () => {
         j++;
       }
 
-      // 그룹에 대한 최적화 이득 계산
+      // 2. 그룹에 대한 최적화 이득 계산
       if (group.notes.length > 1) {
+        const lValueBeforeGroup = lValueMap.get(group.startIndex);
+        const lCommandForGroup = `l${group.noteLengthStr}`;
+
         const originalLength = group.notes.reduce((sum, n) => sum + n.raw.length, 0);
-        const lCommand = `l${group.noteLengthStr}`;
         const optimizedNoteLength = group.notes.reduce((sum, n) => sum + n.raw.replace(/\d+\.?/, "").length, 0);
-        const optimizedTotalLength = (lCommand !== lastLValue ? lCommand.length : 0) + optimizedNoteLength;
+
+        let cost = 0;
+        // 그룹 앞에 L명령어를 추가하는 비용
+        if (lCommandForGroup !== `l${lValueBeforeGroup}`) {
+          cost += lCommandForGroup.length;
+        }
+
+        // 그룹 뒤에 원래 L값으로 복원하는 비용
+        const nextToken = track[group.endIndex];
+        const needsRestoration = !(nextToken && nextToken.raw.toLowerCase().startsWith("l")) && group.noteLengthStr !== lValueBeforeGroup;
+        if (needsRestoration) {
+          cost += `l${lValueBeforeGroup}`.length;
+        }
+
+        const optimizedTotalLength = optimizedNoteLength + cost;
 
         const gain = originalLength - optimizedTotalLength;
 
         if (gain > 0) {
-          // 이득이 있으면 최적화 적용
-          if (lCommand !== lastLValue) {
-            newTrack.push({ type: "command", raw: lCommand });
-            lastLValue = lCommand;
+          // 3. 이득이 있으면 최적화 적용
+          if (lCommandForGroup !== `l${lValueBeforeGroup}`) {
+            newTrack.push({ type: "command", raw: lCommandForGroup });
           }
           group.tokens.forEach((runToken) => {
             if (runToken.type === "note" || runToken.type === "rest") {
@@ -1552,6 +1796,9 @@ document.addEventListener("DOMContentLoaded", () => {
               newTrack.push(runToken);
             }
           });
+          if (needsRestoration) {
+            newTrack.push({ type: "command", raw: `l${lValueBeforeGroup}` });
+          }
           i = group.endIndex; // 인덱스 점프
           continue;
         }
@@ -1566,11 +1813,55 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
+   * L 명령어 최적화 2단계: 현재 L값과 일치하는 개별 음표의 길이를 제거합니다.
+   * @param {Array<Object>} track - 1단계 최적화가 끝난 트랙의 토큰 배열
+   * @returns {Array<Object>} 2단계 최적화가 적용된 새로운 토큰 배열
+   */
+  function optimizeLCommandPhase2(track) {
+    const newTrack = [];
+    let currentLValue = "4"; // MML의 기본 L값
+
+    for (const token of track) {
+      const lowerRaw = token.raw.toLowerCase();
+
+      if (lowerRaw.startsWith("l")) {
+        // L 명령어를 만나면 현재 L값을 갱신
+        const match = lowerRaw.match(/l(\d+\.?)/);
+        if (match) {
+          currentLValue = match[1];
+        }
+        newTrack.push(token);
+        continue;
+      }
+
+      if (token.type === "note" || token.type === "rest") {
+        const noteLengthStr = `${token.noteLength}${token.hasDot ? "." : ""}`;
+
+        // 음표의 길이가 현재 L값과 같고, raw 값에 길이가 명시되어 있다면 제거
+        if (noteLengthStr === currentLValue && /\d/.test(lowerRaw)) {
+          const newRaw = token.raw.replace(/\d+\.?/, "");
+          // raw 값이 비어있지 않은 경우에만 (예: 'c16' -> 'c')
+          if (newRaw) {
+            const newToken = { ...token, raw: newRaw };
+            newTrack.push(newToken);
+            continue;
+          }
+        }
+      }
+
+      // 최적화 대상이 아니면 원본 토큰을 그대로 추가
+      newTrack.push(token);
+    }
+
+    return newTrack;
+  }
+
+  /**
    * L 명령어 최적화 3단계: 불필요한 L 명령어를 제거하여 전체 길이를 줄입니다.
    * @param {Array<Object>} track - 2단계 최적화가 끝난 트랙의 토큰 배열
    * @returns {Array<Object>} 3단계 최적화가 적용된 새로운 토큰 배열
    */
-  function optimizeLCommandPhase3(track) {
+  function optimizeLCommandPhase3(track, trackIndex) {
     let currentTrack = [...track];
     let changedInPass = true;
 
@@ -1598,7 +1889,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const lIndex = lTokenInfo.index;
         const lTokenToDelete = currentTrack[lIndex];
-        const lValueToDelete = lTokenInfo.value;
         const prevLValue = prevLTokenInfo.value;
 
         // L 명령어의 영향 범위 (현재 L부터 다음 L 직전까지)
@@ -1633,7 +1923,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (originalLength > simulatedLength) {
           const originalSegmentRaw = lTokenToDelete.raw + affectedSegment.map((t) => t.raw).join("");
           const simulatedSegmentRaw = simulatedSegmentRaws.join("");
-          console.log(`Optimizing L-command (gain: ${originalLength - simulatedLength}):`);
+          console.log(`[Track ${trackIndex + 1}, Index: ${lIndex}] Optimizing L-command (gain: ${originalLength - simulatedLength}):`);
           console.log(`  - From: ${originalSegmentRaw}`);
           console.log(`  - To:   ${simulatedSegmentRaw}`);
           changedInPass = true;
@@ -1653,6 +1943,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
           lastProcessedIndex = nextLIndex - 1;
+          break; // 한 번에 하나의 L 명령어만 제거하고 루프를 중단합니다.
         }
       }
 
@@ -1661,7 +1952,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (changedInPass) {
         // 변경이 있었다면, 다음 반복을 위해 트랙을 업데이트
-        currentTrack = processTokens(nextTrack.map(({ raw, type }) => ({ raw, type })));
+        // processTokens를 다시 호출하면 L 명령어의 noteLength 정보가 유실될 수 있으므로
+        // raw 토큰만으로 새 트랙을 만들어 다시 토큰화/처리합니다.
+        const newMmlTrack = nextTrack.map((t) => t.raw).join("");
+        currentTrack = processTokens(tokenizeTrack(newMmlTrack));
       }
     }
 
@@ -1767,90 +2061,63 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * L 명령어 최적화 2단계: 현재 L값과 일치하는 개별 음표의 길이를 제거합니다.
-   * @param {Array<Object>} track - 1단계 최적화가 끝난 트랙의 토큰 배열
-   * @returns {Array<Object>} 2단계 최적화가 적용된 새로운 토큰 배열
+   * 이명동음(Enharmonic)을 사용하여 옥타브 변경을 최적화합니다.
+   * 예: `>c<` -> `b+`, `<b` -> `c-`
+   * @param {Array<Array<Object>>} tracks - 최적화할 트랙 배열
+   * @returns {Array<Array<Object>>} 최적화된 새로운 트랙 배열
    */
-  function optimizeLCommandPhase2(track) {
-    const newTrack = [];
-    let currentLValue = "4"; // MML의 기본 L값
+  function optimizeEnharmonicNotes(tracks) {
+    console.log("--- 이명동음 최적화 시작 ---");
+    const newTracks = [];
 
-    for (const token of track) {
-      const lowerRaw = token.raw.toLowerCase();
-
-      if (lowerRaw.startsWith("l")) {
-        // L 명령어를 만나면 현재 L값을 갱신
-        const match = lowerRaw.match(/l(\d+\.?)/);
-        if (match) {
-          currentLValue = match[1];
+    for (const track of tracks) {
+      const newTrack = [];
+      let i = 0;
+      while (i < track.length) {
+        // '>c<' 패턴 찾기
+        if (
+          i + 2 < track.length &&
+          track[i].raw === ">" &&
+          track[i + 1].type === "note" &&
+          track[i + 1].raw.toLowerCase().startsWith("c") &&
+          !track[i + 1].raw.toLowerCase().startsWith("c+") && // c+는 제외
+          track[i + 2].raw === "<"
+        ) {
+          const noteToken = track[i + 1];
+          const lengthPart = noteToken.raw.match(/\d*\.?/g).join("");
+          const newRaw = `b+${lengthPart}`;
+          const newToken = { ...noteToken, raw: newRaw };
+          newTrack.push(newToken);
+          console.log(`Optimizing Enharmonic: >${noteToken.raw}< -> ${newRaw}`);
+          i += 3; // 3개의 토큰을 처리했으므로 인덱스를 3 증가
+          continue;
         }
-        newTrack.push(token);
-        continue;
-      }
 
-      if (token.type === "note" || token.type === "rest") {
-        const noteLengthStr = `${token.noteLength}${token.hasDot ? "." : ""}`;
-
-        // 음표의 길이가 현재 L값과 같고, raw 값에 길이가 명시되어 있다면 제거
-        if (noteLengthStr === currentLValue && /\d/.test(lowerRaw)) {
-          const newRaw = token.raw.replace(/\d+\.?/, "");
-          // raw 값이 비어있지 않은 경우에만 (예: 'c16' -> 'c')
-          if (newRaw) {
-            const newToken = { ...token, raw: newRaw };
-            newTrack.push(newToken);
-            continue;
-          }
+        // '<b>' 패턴 찾기
+        if (
+          i + 2 < track.length &&
+          track[i].raw === "<" &&
+          track[i + 1].type === "note" &&
+          track[i + 1].raw.toLowerCase().startsWith("b") &&
+          track[i + 2].raw === ">"
+        ) {
+          const noteToken = track[i + 1];
+          const lengthPart = noteToken.raw.match(/\d*\.?/g).join("");
+          const newRaw = `c-${lengthPart}`;
+          const newToken = { ...noteToken, raw: newRaw };
+          newTrack.push(newToken);
+          console.log(`Optimizing Enharmonic: <${noteToken.raw}> -> ${newRaw}`);
+          i += 3; // 3개의 토큰을 처리했으므로 인덱스를 3 증가
+          continue;
         }
-      }
 
-      // 최적화 대상이 아니면 원본 토큰을 그대로 추가
-      newTrack.push(token);
+        // 패턴에 해당하지 않으면 현재 토큰을 그대로 추가
+        newTrack.push(track[i]);
+        i++;
+      }
+      newTracks.push(newTrack);
     }
-
-    return newTrack;
-  }
-
-  /**
-   * L 명령어 최적화 2단계: 현재 L값과 일치하는 개별 음표의 길이를 제거합니다.
-   * @param {Array<Object>} track - 1단계 최적화가 끝난 트랙의 토큰 배열
-   * @returns {Array<Object>} 2단계 최적화가 적용된 새로운 토큰 배열
-   */
-  function optimizeLCommandPhase2(track) {
-    const newTrack = [];
-    let currentLValue = "4"; // MML의 기본 L값
-
-    for (const token of track) {
-      const lowerRaw = token.raw.toLowerCase();
-
-      if (lowerRaw.startsWith("l")) {
-        // L 명령어를 만나면 현재 L값을 갱신
-        const match = lowerRaw.match(/l(\d+\.?)/);
-        if (match) {
-          currentLValue = match[1];
-        }
-        newTrack.push(token);
-        continue;
-      }
-
-      if (token.type === "note" || token.type === "rest") {
-        const noteLengthStr = `${token.noteLength}${token.hasDot ? "." : ""}`;
-
-        // 음표의 길이가 현재 L값과 같고, raw 값에 길이가 명시되어 있다면 제거
-        if (noteLengthStr === currentLValue && /\d/.test(lowerRaw)) {
-          const newRaw = token.raw.replace(/\d+\.?/, "");
-          // raw 값이 비어있지 않은 경우에만 (예: 'c16' -> 'c')
-          if (newRaw) {
-            const newToken = { ...token, raw: newRaw };
-            newTrack.push(newToken);
-            continue;
-          }
-        }
-      }
-
-      // 최적화 대상이 아니면 원본 토큰을 그대로 추가
-      newTrack.push(token);
-    }
-
-    return newTrack;
+    console.log("--- 이명동음 최적화 완료 ---");
+    return newTracks;
   }
 });
