@@ -1129,11 +1129,24 @@ document.addEventListener("DOMContentLoaded", () => {
       return Math.max(max, lastToken.accumulatedTick + lastToken.currentTick);
     }, 0);
 
+    // [수정 제안 1] 모든 트랙에서 마지막 음표/쉼표가 끝나는 시간을 계산합니다.
+    const lastNoteEndTick = tracks.reduce((max, track) => {
+      const lastNoteToken = [...track].reverse().find((t) => t.type === "note" || t.type === "rest");
+      if (!lastNoteToken) return max;
+      return Math.max(max, lastNoteToken.accumulatedTick + lastNoteToken.currentTick);
+    }, 0);
+
     // 1. 각 템포 구간의 시작/끝 tick 정의
     for (let i = 0; i < tempoPoints.length; i++) {
       const startTick = tempoPoints[i].tick;
       // 마지막 구간의 끝은 전체 트랙의 마지막 tick으로 설정
       const endTick = i < tempoPoints.length - 1 ? tempoPoints[i + 1].tick : maxTick;
+
+      // [수정 제안 2] 마지막 템포 포인트이고, 실제 연주되는 음표가 없는 구간이면 건너뜁니다.
+      if (i === tempoPoints.length - 1 && startTick >= lastNoteEndTick) {
+        appendToLog(`[분석] 마지막 템포 구간(tick: ${startTick})은 연주되는 음표가 없어 분석에서 제외합니다.`);
+        continue;
+      }
 
       const segment = {
         startTick: startTick,
